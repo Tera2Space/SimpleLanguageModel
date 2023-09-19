@@ -13,7 +13,7 @@ class SimpleLanguageModel(nn.Module):
         
         self.key = nn.Linear(hidden, head_size, bias=False)
         self.query = nn.Linear(hidden, head_size, bias=False)
-        
+        self.value = nn.Linear(hidden, head_size, bias=False)
         
         hidden_layers = []
         for _ in range(layers):
@@ -24,17 +24,21 @@ class SimpleLanguageModel(nn.Module):
         
         self.lm_head = nn.Linear(hidden, vocab_size)
         
-    def self_attention_no_v(self, x):
+    def self_attention(self, x):
         _, T, _ = x.shape
         key = self.key(x)
         query = self.query(x)
+        value = self.value(x)
+        
         wei = query @ key.transpose(-2, -1) *  self.head_size ** -0.5# (B, T, head_size) @ (B, 16, T) ---> (B, T, T)
         
         trill = torch.tril(torch.ones((T,T),device=self.device))
         wei = wei.masked_fill(trill==0, float("-inf"))
         wei = F.softmax(wei, dim=-1)
         wei = wei.to(self.device)
-        xbow = wei @ x
+        # xbow = wei @ x
+        xbow = wei @ value
+        
         
         return xbow
     
@@ -46,7 +50,7 @@ class SimpleLanguageModel(nn.Module):
         pos_emb = self.pos_embedding_table(torch.arange(T, device=self.device))
         x += pos_emb
         
-        x = self.self_attention_no_v(x)
+        x = self.self_attention(x)
         
         for hidden_layer in self.hidden_layers:
             x = hidden_layer(x)
